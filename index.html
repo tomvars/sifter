@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>d3 Scatter Plot</title>
+        <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+        <script src = "http://axc.net/code_libraries/lasso/lasso.min.js"></script>
+        <script src = "https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+        <script src="https://cdn.datatables.net/1.10.9/js/jquery.dataTables.min.js"></script>
+        <style>
+            body {
+                font: 11px sans-serif;
+            }
+            .axis path,
+            .axis line {
+                fill: none;
+                stroke: #000;
+                shape-rendering: crispEdges;
+            }
+            .dot {
+                stroke: none;
+            }
+            .tooltip {
+                position: absolute;
+                font-size: 12px;
+                width:  auto;
+                height: auto;
+                pointer-events: none;
+                background-color: white;
+            }
+            .lasso path {
+                stroke: rgb(80,80,80);
+                stroke-width:2px;
+            }
+
+            .lasso .drawn {
+                fill-opacity:.05 ;
+            }
+
+            .lasso .loop_close {
+                fill:none;
+                stroke-dasharray: 4,4;
+            }
+
+            .lasso .origin {
+                fill:#FFFFFF;
+                fill-opacity:.5;
+            }
+
+            .not_possible {
+                fill:#000000;
+            }
+
+            .possible {
+                fill:#EC888C;
+            }
+            .wrapper {
+                display: flex;
+            }
+            /* max-height - the only parameter in this file that needs to be edited.
+ * Change it to suit your needs. The rest is recommended to leave as is.
+ */
+            .clusterize-scroll{
+                max-height: 500px;
+                min-width: 100px;
+                overflow: auto;
+            }
+
+            /**
+             * Avoid vertical margins for extra tags
+             * Necessary for correct calculations when rows have nonzero vertical margins
+             */
+            .clusterize-extra-row{
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+            }
+
+            /* By default extra tag .clusterize-keep-parity added to keep parity of rows.
+             * Useful when used :nth-child(even/odd)
+             */
+            .clusterize-extra-row.clusterize-keep-parity{
+                display: none;
+            }
+
+            /* During initialization clusterize adds tabindex to force the browser to keep focus
+             * on the scrolling list, see issue #11
+             * Outline removes default browser's borders for focused elements.
+             */
+            .clusterize-content{
+                outline: 0;
+                counter-reset: clusterize-counter;
+            }
+
+            /* Centering message that appears when no data provided
+             */
+            .clusterize-no-data td{
+                text-align: center;
+            }
+            .label_search {
+                float: right
+            }
+            .selectButton {
+                float: left
+            }
+        </style>
+    </head>
+    <body>
+    <input type="text" id="search" class="label_search"/>
+    <button id="search_button" class="label_search">Search</button>
+    <select id="selectButton" class="selectButton"></select>
+    <div id="wrapper" class="wrapper">
+            <div id="vis-container" class="vis-container"></div>
+            <div id="listArea" class="listArea">
+                <div id="scrollArea" class="clusterize-scroll">
+                    <div id="contentArea" class="clusterize-content">
+                        <div class="clusterize-no-data">Loading data…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <textarea id="txtName" name="txt-Name" placeholder="Search for something.."></textarea>
+        <button id="button">Search</button>
+        <!-- Optionally reference your vis JS file here, or define in a script tag -->
+        <!-- <script type="text/javascript" src="js/my-vis.js"></script> -->
+        <script type="text/javascript">
+            var selections = [];
+            var results = [];
+            var selected_ids = [];
+
+            function flatten(arr) {
+                return arr.reduce(function (flat, toFlatten) {
+                    return flat.concat(Array.isArray(toFlatten) ? flatten(toFlatten) : toFlatten);
+                }, []);
+            }
+            var run_viz = function(csv_name) {
+                d3.csv('./umap_clinicalBERT_25k.csv', function loadCallback(error1, data1) {
+                    data1.forEach(function(d) { // convert strings to numbers
+                        d.y = +d.y;
+                        d.x = +d.x;
+                    });
+                    d3.csv('./tsne_clinicalBERT_25k.csv', function loadCallback(error2, data2) {
+                        data2.forEach(function(d) { // convert strings to numbers
+                            d.y = +d.y;
+                            d.x = +d.x;
+                        });
+                        makeVis(data1, data2);
+                    });
+                });
+                };
+
+            run_viz('umap');
+          var makeVis = function(data1, data2) {
+              // Common pattern for defining vis size and margins
+              var margin = { top: 20, right: 20, bottom: 30, left: 40 },
+                  width  = 800 - margin.left - margin.right,
+                  height = 500 - margin.top - margin.bottom;
+
+              var xScale = d3.scale.linear()
+                  .domain([ d3.min(data1, function(d) { return d.x; }) - 1,
+                      d3.max(data1, function(d) { return d.x; }) + 1 ])
+                  .range([0, width]);
+
+              var yScale = d3.scale.linear()
+                  .domain([ d3.min(data1, function(d) { return d.y; }) - 1,
+                      d3.max(data1, function(d) { return d.y; }) + 1 ])
+                  .range([height, 0]); // flip order because y-axis origin is upper LEFT
+
+              // Define our axes
+              var xAxis = d3.svg.axis()
+                  .scale(xScale)
+                  .orient('bottom');
+
+              var yAxis = d3.svg.axis()
+                  .scale(yScale)
+                  .orient('left');
+
+              function zoomed() {
+                  canvas.selectAll(".x.axis").call(xAxis);
+                  canvas.selectAll(".y.axis").call(yAxis);
+                  canvas.attr("transform", "translate(" + d3.event.translate + ")" + " scale(" + d3.event.scale + ")")
+              }
+              var zoom = d3.behavior.zoom()
+                  .x(xScale)
+                  .y(yScale)
+                  .scaleExtent([1, 10])
+                  .on("zoom", zoomed);
+              // Add the visualization svg canvas to the vis-container <div>
+              var canvas = d3.select("#vis-container").append("svg")
+                  .attr("width",  width  + margin.left + margin.right)
+                  .attr("height", height + margin.top  + margin.bottom)
+                .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+                  .call(zoom)
+              ;
+              canvas.on("mousedown.zoom", null);
+              // Define our scales
+              var color = d3.scale.category10();
+
+              // Add x-axis to the canvas
+              var gX = canvas.append("g")
+                  .attr("class", "x axis")
+                  .attr("transform", "translate(0," + height + ")") // move axis to the bottom of the canvas
+                  .call(xAxis)
+                .append("text")
+                  .attr("class", "label")
+                  .attr("x", width) // x-offset from the xAxis, move label all the way to the right
+                  .attr("y", -6)    // y-offset from the xAxis, moves text UPWARD!
+                  .style("text-anchor", "end") // right-justify text
+                  .text("x");
+
+              // Add y-axis to the canvas
+              var gY = canvas.append("g")
+                  .attr("class", "y axis") // .orient('left') took care of axis positioning for us
+                  .call(yAxis)
+                .append("text")
+                  .attr("class", "label")
+                  .attr("transform", "rotate(-90)") // although axis is rotated, text is not
+                  .attr("y", 15) // y-offset from yAxis, moves text to the RIGHT because it's rotated, and positive y is DOWN
+                  .style("text-anchor", "end")
+                  .text("y");
+
+              // Lasso functions to execute while lassoing
+              var lasso_start = function() {
+                  lasso.items()
+                      .attr("r", 0.5) // reset size
+                      .style("fill", null) // clear all of the fills
+                      .classed({"not_possible":true,"selected":false}); // style as not possible
+              };
+
+              var lasso_draw = function() {
+                  // Style the possible dots
+                  lasso.items().filter(function(d) {return d.possible===true})
+                      .classed({"not_possible":false,"possible":true});
+
+                  // Style the not possible dot
+                  lasso.items().filter(function(d) {return d.possible===false})
+                      .classed({"not_possible":true,"possible":false});
+              };
+              var clusterize = new Clusterize({
+                  rows: [],
+                  scrollId: 'scrollArea',
+                  contentId: 'contentArea',
+                  verify_change: true,
+                  rows_in_block: 50
+              });
+
+              var onSearch = function() {
+                  var indexArr = [];
+                  for(var i = 0, ii = selections.length; i < ii; i++) {
+                      if(selections[i].toString().toLowerCase().includes(search.value.toLowerCase())){
+                          indexArr.push(i);
+                      };
+                  }
+                  var resultArr = indexArr.map(i => selections[i])
+                  var output_search = resultArr;
+                  return output_search;
+              };
+              var lasso_end = function(d) {
+                  // Reset the color of all dots
+                  // Save selection
+                  var current_selections = lasso.items().filter(function(d){
+                      return d.selected == true;
+                  });
+                  selections.push(filterresults(current_selections));
+                  selections = flatten(selections);
+                  var set = new Set(selections);
+                  console.log(Array.from(set));
+                  clusterize.update(Array.from(set));
+                  // Style the selected dots
+                  lasso.items().filter(function (d) {
+                      return d.selected === true
+                  })
+                      .classed({"not_possible": false, "possible": false})
+                      .attr("r", 0.5)
+                      .attr("fill", "red");
+
+                  // Reset the style of the not selected dots
+                  lasso.items().filter(function (d) {
+                      return d.selected === false
+                  })
+                      .classed({"not_possible": false, "possible": false})
+                      .attr("r", 0.5);
+              };
+
+              var filterresults = function(selections) {
+                  var flattened = flatten(selections);
+                  var results = flattened.map(a => '<div>' + a.__data__.text + '</div>');
+                  return results;
+              }
+
+              // Create the area where the lasso event can be triggered
+              var lasso_area = canvas.append("rect")
+                  .attr("width",width)
+                  .attr("height",height)
+                  .style("opacity",0);
+
+              // Define the lasso
+              var lasso = d3.lasso()
+                  .closePathDistance(75) // max distance for the lasso loop to be closed
+                  .closePathSelect(true) // can items be selected by closing the path?
+                  .hoverSelect(true) // can items by selected by hovering over them?
+                  .area(lasso_area) // area where the lasso can be started
+                  .on("start",lasso_start) // lasso start function
+                  .on("draw",lasso_draw) // lasso draw function
+                  .on("end",lasso_end); // lasso end function
+
+              canvas.call(lasso);
+              // Add the tooltip container to the vis container
+              // it's invisible and its position/contents are defined during mouseover
+              var tooltip = d3.select("#vis-container").append("div")
+                  .attr("class", "tooltip")
+                  .style("opacity", 0);
+
+              // tooltip mouseover event handler
+              var tipMouseover = function(d) {
+                  var html  = d.text + "<br/>" +
+                      "<b>" + d.eventid + "</b>";
+                  tooltip.html(html)
+                      .style("left", (d3.event.pageX + 15) + "px")
+                      .style("top", (d3.event.pageY - 28) + "px")
+                    .transition()
+                      .duration(200) // ms
+                      .style("opacity", .9) // started as 0!
+
+              };
+              // tooltip mouseout event handler
+              var tipMouseout = function(d) {
+                  tooltip.transition()
+                      .duration(300) // ms
+                      .style("opacity", 0); // don't care about position!
+              };
+
+              // Add data points!
+              var circles = canvas.selectAll(".dot")
+                .data(data1)
+                  .enter().append("circle")
+                .attr("class", "dot")
+                .attr("r", 0.5) // radius size, could map to another data dimension
+                .attr("cx", function(d) { return xScale( d.x ); })     // x position
+                .attr("cy", function(d) { return yScale( d.y ); })  // y position
+                .on("mouseover", tipMouseover)
+                .on("mouseout", tipMouseout);
+              d3.select("#button").on("click", function(d) {
+                  var txtName = d3.select("#txtName").node().value;
+                  circles.style("fill", function(d) {
+                      return d.text.toLowerCase().includes(txtName.toLowerCase()) ? "red" : "black";
+                  });
+                  var filter_fn = function (d) {
+                      return d.text.toLowerCase().includes(txtName.toLowerCase())
+                  };
+                  console.log(filter_fn(d));
+              });
+              d3.select("#search_button").on("click", function() {
+                  var output_search = onSearch();
+                  clusterize.update(output_search);
+              });
+              lasso.items(d3.selectAll(".dot"));
+              // add the options to the button
+              d3.select("#selectButton")
+                  .selectAll('myOptions')
+                  .data(['umap', 'tsne'])
+                  .enter()
+                  .append('option')
+                  .text(function (d) { return d; }) // text showed in the menu
+                  .attr("value", function (d) { return d; })
+              // When the button is changed, run the updateChart function
+              d3.select("#selectButton").on("change", function(d) {
+                  // recover the option that has been chosen
+                  var selectedOption = d3.select(this).property("value")
+                  // run the updateChart function with this selected option
+                  if (selectedOption=='tsne') {
+                      data = data2;
+                  } else {
+                      data = data1;
+                  }
+                  var xScale = d3.scale.linear()
+                      .domain([ d3.min(data, function(d) { return d.x; }) - 1,
+                          d3.max(data, function(d) { return d.x; }) + 1 ])
+                      .range([0, width]);
+
+                  var yScale = d3.scale.linear()
+                      .domain([ d3.min(data, function(d) { return d.y; }) - 1,
+                          d3.max(data, function(d) { return d.y; }) + 1 ])
+                      .range([height, 0]); // flip order because y-axis origin is upper LEFT
+
+                  // Define our axes
+                  var xAxis = d3.svg.axis()
+                      .scale(xScale)
+                      .orient('bottom');
+
+                  var yAxis = d3.svg.axis()
+                      .scale(yScale)
+                      .orient('left');
+
+                  // Add x-axis to the canvas
+                  canvas.selectAll("g.x.axis")
+                      .call(xAxis);
+                  // Add y-axis to the canvas
+                  canvas.selectAll("g.y.axis")
+                      .call(yAxis);
+                  // Add data points!
+                  canvas.selectAll('circle')
+                      .data(data)
+                      .attr("cx", function(d) { return xScale( d.x ); })     // x position
+                      .attr("cy", function(d) { return yScale( d.y ); });  // y positionn
+              })
+          };
+        </script>
+    </body>
+</html>
