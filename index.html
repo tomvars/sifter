@@ -3,8 +3,8 @@
     <head>
         <meta charset="utf-8">
         <title>d3 Scatter Plot</title>
-        <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
-        <script src = "http://axc.net/code_libraries/lasso/lasso.min.js"></script>
+        <script src="https://d3js.org/d3.v5.js" charset="utf-8"></script>
+        <script src="./d3-lasso.js"></script>
         <script src = "https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
         <script src="https://cdn.datatables.net/1.10.9/js/jquery.dataTables.min.js"></script>
@@ -104,11 +104,13 @@
                 float: left
             }
         </style>
+        <script src="d3-lasso.js"></script>
     </head>
     <body>
     <input type="text" id="search" class="label_search"/>
     <button id="search_button" class="label_search">Search</button>
     <select id="selectButton" class="selectButton"></select>
+    <button id="reset" class="reset">Reset</button>
     <div id="wrapper" class="wrapper">
             <div id="vis-container" class="vis-container"></div>
             <div id="listArea" class="listArea">
@@ -134,12 +136,12 @@
                 }, []);
             }
             var run_viz = function(csv_name) {
-                d3.csv('./umap_clinicalBERT_25k.csv', function loadCallback(error1, data1) {
+                d3.csv('./umap_clinicalBERT_25k.csv').then( function(data1) {
                     data1.forEach(function(d) { // convert strings to numbers
                         d.y = +d.y;
                         d.x = +d.x;
                     });
-                    d3.csv('./tsne_clinicalBERT_25k.csv', function loadCallback(error2, data2) {
+                    d3.csv('./tsne_clinicalBERT_25k.csv').then( function(data2) {
                         data2.forEach(function(d) { // convert strings to numbers
                             d.y = +d.y;
                             d.x = +d.x;
@@ -156,33 +158,33 @@
                   width  = 800 - margin.left - margin.right,
                   height = 500 - margin.top - margin.bottom;
 
-              var xScale = d3.scale.linear()
+              var xScale = d3.scaleLinear()
                   .domain([ d3.min(data1, function(d) { return d.x; }) - 1,
                       d3.max(data1, function(d) { return d.x; }) + 1 ])
                   .range([0, width]);
 
-              var yScale = d3.scale.linear()
+              var yScale = d3.scaleLinear()
                   .domain([ d3.min(data1, function(d) { return d.y; }) - 1,
                       d3.max(data1, function(d) { return d.y; }) + 1 ])
                   .range([height, 0]); // flip order because y-axis origin is upper LEFT
 
               // Define our axes
-              var xAxis = d3.svg.axis()
-                  .scale(xScale)
-                  .orient('bottom');
+              var xAxis = d3.axisBottom()
+                  .scale(xScale);
 
-              var yAxis = d3.svg.axis()
-                  .scale(yScale)
-                  .orient('left');
+              var yAxis = d3.axisLeft()
+                  .scale(yScale);
 
               function zoomed() {
-                  canvas.selectAll(".x.axis").call(xAxis);
-                  canvas.selectAll(".y.axis").call(yAxis);
-                  canvas.attr("transform", "translate(" + d3.event.translate + ")" + " scale(" + d3.event.scale + ")")
+                  circles.attr("transform", d3.event.transform);
+                  gX.call(xAxis.scale(d3.event.transform.rescaleX(xScale)));
+                  gY.call(yAxis.scale(d3.event.transform.rescaleY(yScale)));
               }
-              var zoom = d3.behavior.zoom()
-                  .x(xScale)
-                  .y(yScale)
+              function resetted() {
+                  console.log('Got here')
+                  canvas.call(zoom.transform, d3.zoomIdentity);
+              }
+              var zoom = d3.zoom()
                   .scaleExtent([1, 10])
                   .on("zoom", zoomed);
               // Add the visualization svg canvas to the vis-container <div>
@@ -191,34 +193,21 @@
                   .attr("height", height + margin.top  + margin.bottom)
                 .append("g")
                   .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
-                  .call(zoom)
-              ;
-              canvas.on("mousedown.zoom", null);
-              // Define our scales
-              var color = d3.scale.category10();
 
+              ;
+
+              canvas.on("mousedown.zoom", null);
+              canvas.call(zoom)
               // Add x-axis to the canvas
               var gX = canvas.append("g")
-                  .attr("class", "x axis")
+                  .attr("class", "axis axis--x")
                   .attr("transform", "translate(0," + height + ")") // move axis to the bottom of the canvas
                   .call(xAxis)
-                .append("text")
-                  .attr("class", "label")
-                  .attr("x", width) // x-offset from the xAxis, move label all the way to the right
-                  .attr("y", -6)    // y-offset from the xAxis, moves text UPWARD!
-                  .style("text-anchor", "end") // right-justify text
-                  .text("x");
 
               // Add y-axis to the canvas
               var gY = canvas.append("g")
-                  .attr("class", "y axis") // .orient('left') took care of axis positioning for us
+                  .attr("class", "axis axis--y") // .orient('left') took care of axis positioning for us
                   .call(yAxis)
-                .append("text")
-                  .attr("class", "label")
-                  .attr("transform", "rotate(-90)") // although axis is rotated, text is not
-                  .attr("y", 15) // y-offset from yAxis, moves text to the RIGHT because it's rotated, and positive y is DOWN
-                  .style("text-anchor", "end")
-                  .text("y");
 
               // Lasso functions to execute while lassoing
               var lasso_start = function() {
@@ -230,12 +219,14 @@
 
               var lasso_draw = function() {
                   // Style the possible dots
-                  lasso.items().filter(function(d) {return d.possible===true})
-                      .classed({"not_possible":false,"possible":true});
+                  lasso.possibleItems()
+                      .classed("not_possible", false)
+                      .classed("possible", true);
 
                   // Style the not possible dot
-                  lasso.items().filter(function(d) {return d.possible===false})
-                      .classed({"not_possible":true,"possible":false});
+                  lasso.notPossibleItems()
+                      .classed("not_possible", true)
+                      .classed("possible", false);
               };
               var clusterize = new Clusterize({
                   rows: [],
@@ -258,28 +249,23 @@
               };
               var lasso_end = function(d) {
                   // Reset the color of all dots
+                  lasso.items()
+                      .classed("not_possible",false)
+                      .classed("possible",false)
                   // Save selection
-                  var current_selections = lasso.items().filter(function(d){
-                      return d.selected == true;
-                  });
+                  var current_selections = lasso.selectedItems()._groups;
                   selections.push(filterresults(current_selections));
                   selections = flatten(selections);
                   var set = new Set(selections);
-                  console.log(Array.from(set));
                   clusterize.update(Array.from(set));
                   // Style the selected dots
-                  lasso.items().filter(function (d) {
-                      return d.selected === true
-                  })
-                      .classed({"not_possible": false, "possible": false})
+                  lasso.selectedItems()
+                      .classed("selected", true)
                       .attr("r", 0.5)
                       .attr("fill", "red");
 
                   // Reset the style of the not selected dots
-                  lasso.items().filter(function (d) {
-                      return d.selected === false
-                  })
-                      .classed({"not_possible": false, "possible": false})
+                  lasso.notSelectedItems()
                       .attr("r", 0.5);
               };
 
@@ -300,7 +286,7 @@
                   .closePathDistance(75) // max distance for the lasso loop to be closed
                   .closePathSelect(true) // can items be selected by closing the path?
                   .hoverSelect(true) // can items by selected by hovering over them?
-                  .area(lasso_area) // area where the lasso can be started
+                  .targetArea(lasso_area) // area where the lasso can be started
                   .on("start",lasso_start) // lasso start function
                   .on("draw",lasso_draw) // lasso draw function
                   .on("end",lasso_end); // lasso end function
@@ -355,6 +341,7 @@
                   var output_search = onSearch();
                   clusterize.update(output_search);
               });
+              d3.select("#reset").on("click", resetted);
               lasso.items(d3.selectAll(".dot"));
               // add the options to the button
               d3.select("#selectButton")
@@ -374,31 +361,27 @@
                   } else {
                       data = data1;
                   }
-                  var xScale = d3.scale.linear()
+                  var xScale = d3.scaleLinear()
                       .domain([ d3.min(data, function(d) { return d.x; }) - 1,
                           d3.max(data, function(d) { return d.x; }) + 1 ])
                       .range([0, width]);
 
-                  var yScale = d3.scale.linear()
+                  var yScale = d3.scaleLinear()
                       .domain([ d3.min(data, function(d) { return d.y; }) - 1,
                           d3.max(data, function(d) { return d.y; }) + 1 ])
                       .range([height, 0]); // flip order because y-axis origin is upper LEFT
 
                   // Define our axes
-                  var xAxis = d3.svg.axis()
-                      .scale(xScale)
-                      .orient('bottom');
+                  var xAxis = d3.axisBottom()
+                      .scale(xScale);
 
-                  var yAxis = d3.svg.axis()
-                      .scale(yScale)
-                      .orient('left');
+                  var yAxis = d3.axisLeft()
+                      .scale(yScale);
 
                   // Add x-axis to the canvas
-                  canvas.selectAll("g.x.axis")
-                      .call(xAxis);
+                  canvas.selectAll("g.x.axis").call(xAxis);
                   // Add y-axis to the canvas
-                  canvas.selectAll("g.y.axis")
-                      .call(yAxis);
+                  canvas.selectAll("g.y.axis").call(yAxis);
                   // Add data points!
                   canvas.selectAll('circle')
                       .data(data)
