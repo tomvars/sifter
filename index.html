@@ -113,11 +113,23 @@
     <button id="reset" class="reset">Reset</button>
     <div id="wrapper" class="wrapper">
             <div id="vis-container" class="vis-container"></div>
-            <div id="listArea" class="listArea">
+            <div class="clusterize">
+                <table id="table_1">
+                    <thead>
+                    <tr>
+                        <th>Selected Reports</th>
+                        <th><input type="checkbox" class="selectAll" id="selectAll"></th>
+                    </tr>
+                    </thead>
+                </table>
                 <div id="scrollArea" class="clusterize-scroll">
-                    <div id="contentArea" class="clusterize-content">
-                        <div class="clusterize-no-data">Loading data…</div>
-                    </div>
+                    <table>
+                        <tbody id="contentArea" class="clusterize-content">
+                        <tr class="clusterize-no-data">
+                            <td>Loading data…</td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -181,7 +193,6 @@
                   gY.call(yAxis.scale(d3.event.transform.rescaleY(yScale)));
               }
               function resetted() {
-                  console.log('Got here')
                   canvas.call(zoom.transform, d3.zoomIdentity);
               }
               var zoom = d3.zoom()
@@ -235,6 +246,9 @@
                   verify_change: true,
                   rows_in_block: 50
               });
+              var table = d3.select('body')
+                  .append('table');
+
 
               var onSearch = function() {
                   var indexArr = [];
@@ -246,6 +260,17 @@
                   var resultArr = indexArr.map(i => selections[i])
                   var output_search = resultArr;
                   return output_search;
+              };
+              var update = function() {
+                  var choices = [];
+                  console.log('CALLED THIS FUNCTION!')
+                  d3.selectAll(".mycheckbox").each(function (d) {
+                      cb = d3.select(this);
+                      if (cb.property("checked")) {
+                          choices.push(cb.property("value"));
+                      }
+                  });
+                  console.log(choices);
               };
               var lasso_end = function(d) {
                   // Reset the color of all dots
@@ -267,13 +292,15 @@
                   // Reset the style of the not selected dots
                   lasso.notSelectedItems()
                       .attr("r", 0.5);
+                  d3.selectAll(".mycheckbox").on("click", update);
+                  update();
               };
 
               var filterresults = function(selections) {
                   var flattened = flatten(selections);
-                  var results = flattened.map(a => '<div>' + a.__data__.text + '</div>');
+                  var results = flattened.map(a => '<tr>' + '<td><input type=\"checkbox\" class=\"mycheckbox\" id=​rfile></input></td>' + '<th>' + a.__data__.eventid + '</th>' + '<th>' + a.__data__.text + '</th>' + '</tr>');
                   return results;
-              }
+              };
 
               // Create the area where the lasso event can be triggered
               var lasso_area = canvas.append("rect")
@@ -317,6 +344,10 @@
                       .style("opacity", 0); // don't care about position!
               };
 
+              var selectAll = function(d) {
+                  console.log('Select All!');
+              };
+
               // Add data points!
               var circles = canvas.selectAll(".dot")
                 .data(data1)
@@ -327,6 +358,7 @@
                 .attr("cy", function(d) { return yScale( d.y ); })  // y position
                 .on("mouseover", tipMouseover)
                 .on("mouseout", tipMouseout);
+
               d3.select("#button").on("click", function(d) {
                   var txtName = d3.select("#txtName").node().value;
                   circles.style("fill", function(d) {
@@ -342,6 +374,10 @@
                   clusterize.update(output_search);
               });
               d3.select("#reset").on("click", resetted);
+              d3.select("#selectAll").on("click", selectAll);
+              update();
+
+              // d3.select("#rfile").on("onmouseup", function(){console.log('Clicked button!')})
               lasso.items(d3.selectAll(".dot"));
               // add the options to the button
               d3.select("#selectButton")
