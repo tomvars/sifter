@@ -135,6 +135,7 @@
         </div>
         <textarea id="txtName" name="txt-Name" placeholder="Search for something.."></textarea>
         <button id="button">Search</button>
+        <button id="label_1">Follow-up</button>
         <!-- Optionally reference your vis JS file here, or define in a script tag -->
         <!-- <script type="text/javascript" src="js/my-vis.js"></script> -->
         <script type="text/javascript">
@@ -263,11 +264,11 @@
               };
               var update = function() {
                   var choices = [];
-                  console.log('CALLED THIS FUNCTION!')
+                  console.log('CALLED THIS FUNCTION!');
                   d3.selectAll(".mycheckbox").each(function (d) {
                       cb = d3.select(this);
                       if (cb.property("checked")) {
-                          choices.push(cb.property("value"));
+                          choices.push(cb['_groups'][0][0].attributes.someprop.value);
                       }
                   });
                   console.log(choices);
@@ -279,7 +280,7 @@
                       .classed("possible",false)
                   // Save selection
                   var current_selections = lasso.selectedItems()._groups;
-                  selections.push(filterresults(current_selections));
+                  selections = filterresults(current_selections);
                   selections = flatten(selections);
                   var set = new Set(selections);
                   clusterize.update(Array.from(set));
@@ -298,7 +299,7 @@
 
               var filterresults = function(selections) {
                   var flattened = flatten(selections);
-                  var results = flattened.map(a => '<tr>' + '<td><input type=\"checkbox\" class=\"mycheckbox\" id=​rfile></input></td>' + '<th>' + a.__data__.eventid + '</th>' + '<th>' + a.__data__.text + '</th>' + '</tr>');
+                  var results = flattened.map(a => '<tr>' + '<td><input type=\"checkbox\" class=\"mycheckbox\" id=​rfile someprop="' + a.__data__.eventid + '"></input></td>' + '<th>' + a.__data__.eventid + '</th>' + '<th>' + a.__data__.text + '</th>' + '</tr>');
                   return results;
               };
 
@@ -345,7 +346,23 @@
               };
 
               var selectAll = function(d) {
+                  var choices = [];
                   console.log('Select All!');
+                  d3.selectAll(".selectAll").each(function (d) {
+                      cb = d3.select(this);
+                      if (cb.property("checked")) {
+                          d3.selectAll(".mycheckbox").each(function (d) {
+                              cb = d3.select(this);
+                              cb.property("checked", true)
+                          });
+                      } else {
+                          d3.selectAll(".mycheckbox").each(function (d) {
+                              cb = d3.select(this);
+                              cb.property("checked", false)
+                          });
+                      }
+                  });
+                  console.log(choices);
               };
 
               // Add data points!
@@ -362,7 +379,7 @@
               d3.select("#button").on("click", function(d) {
                   var txtName = d3.select("#txtName").node().value;
                   circles.style("fill", function(d) {
-                      return d.text.toLowerCase().includes(txtName.toLowerCase()) ? "red" : "black";
+                      return d.text.toLowerCase().includes(txtName.toLowerCase()) ? "blue" : "black";
                   });
                   var filter_fn = function (d) {
                       return d.text.toLowerCase().includes(txtName.toLowerCase())
