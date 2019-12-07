@@ -55,6 +55,12 @@
             .possible {
                 fill:#EC888C;
             }
+            .lbl1 {
+                fill: #ec7a32;
+            }
+            .lbl2 {
+                fill: #688eec;
+            }
             .wrapper {
                 display: flex;
             }
@@ -103,6 +109,12 @@
             .selectButton {
                 float: left
             }
+            .label_2 {
+                float: right
+            }
+            .label_1 {
+                float: right
+            }
         </style>
         <script src="d3-lasso.js"></script>
     </head>
@@ -135,13 +147,17 @@
         </div>
         <textarea id="txtName" name="txt-Name" placeholder="Search for something.."></textarea>
         <button id="button">Search</button>
-        <button id="label_1">Follow-up</button>
+        <button id="label_2" class="label_2">Label 2</button>
+        <button id="label_1" class="label_1">Label 1</button>
         <!-- Optionally reference your vis JS file here, or define in a script tag -->
         <!-- <script type="text/javascript" src="js/my-vis.js"></script> -->
         <script type="text/javascript">
             var selections = [];
-            var results = [];
+            var current_selections = [];
             var selected_ids = [];
+            var lassod_ids = [];
+            var lbl1ids = [];
+            var lbl2ids = [];
 
             function flatten(arr) {
                 return arr.reduce(function (flat, toFlatten) {
@@ -168,8 +184,8 @@
           var makeVis = function(data1, data2) {
               // Common pattern for defining vis size and margins
               var margin = { top: 20, right: 20, bottom: 30, left: 40 },
-                  width  = 800 - margin.left - margin.right,
-                  height = 500 - margin.top - margin.bottom;
+                  width  = 1000 - margin.left - margin.right,
+                  height = 700 - margin.top - margin.bottom;
 
               var xScale = d3.scaleLinear()
                   .domain([ d3.min(data1, function(d) { return d.x; }) - 1,
@@ -224,7 +240,7 @@
               // Lasso functions to execute while lassoing
               var lasso_start = function() {
                   lasso.items()
-                      .attr("r", 0.5) // reset size
+                      .attr("r", 0.75) // reset size
                       .style("fill", null) // clear all of the fills
                       .classed({"not_possible":true,"selected":false}); // style as not possible
               };
@@ -262,44 +278,84 @@
                   var output_search = resultArr;
                   return output_search;
               };
-              var update = function() {
-                  var choices = [];
+              var update_selected_ids = function() {
+                  selected_ids = [];
                   console.log('CALLED THIS FUNCTION!');
                   d3.selectAll(".mycheckbox").each(function (d) {
                       cb = d3.select(this);
                       if (cb.property("checked")) {
-                          choices.push(cb['_groups'][0][0].attributes.someprop.value);
+                          selected_ids.push(cb['_groups'][0][0].attributes.someprop.value);
                       }
                   });
-                  console.log(choices);
+                  console.log(selected_ids);
               };
+              var drawTable = function(d) {
+                  selections = filterresults(current_selections);
+                  selections = flatten(selections);
+                  var set = new Set(selections);
+                  clusterize.update(Array.from(set));
+              };
+              var updateColors = function(d) {
+                  var getColor = function(d) {
+                      if (lbl1ids.includes(Number(d.eventid))) {
+                          return "blue"
+                      } else if (lbl2ids.includes(Number(d.eventid))) {
+                          return "orange"
+                      } else if (selected_ids.includes(Number(d.eventid))){
+                          return "red"
+                      } else {
+                              return "black"
+                          }
+                  };
+                  circles.style("fill", function (d) {
+                      return getColor(d);
+                  });
+              };
+
               var lasso_end = function(d) {
                   // Reset the color of all dots
                   lasso.items()
                       .classed("not_possible",false)
                       .classed("possible",false)
                   // Save selection
-                  var current_selections = lasso.selectedItems()._groups;
-                  selections = filterresults(current_selections);
-                  selections = flatten(selections);
-                  var set = new Set(selections);
-                  clusterize.update(Array.from(set));
+                  current_selections = lasso.selectedItems()._groups;
+                  var get_flattened_id_array = function(arr) {
+                      var flattened = flatten(arr)
+                      return flattened.map(a => a.__data__.eventid).map(Number)
+                  }
+                  lassod_ids = get_flattened_id_array(current_selections);
+                  drawTable();
                   // Style the selected dots
                   lasso.selectedItems()
                       .classed("selected", true)
-                      .attr("r", 0.5)
+                      .attr("r", 0.75)
                       .attr("fill", "red");
 
                   // Reset the style of the not selected dots
-                  lasso.notSelectedItems()
-                      .attr("r", 0.5);
-                  d3.selectAll(".mycheckbox").on("click", update);
-                  update();
+                  //lasso.notSelectedItems()
+                  d3.selectAll(".mycheckbox").on("click", update_selected_ids);
+                  update_selected_ids();
+                  updateColors();
               };
 
               var filterresults = function(selections) {
                   var flattened = flatten(selections);
-                  var results = flattened.map(a => '<tr>' + '<td><input type=\"checkbox\" class=\"mycheckbox\" id=​rfile someprop="' + a.__data__.eventid + '"></input></td>' + '<th>' + a.__data__.eventid + '</th>' + '<th>' + a.__data__.text + '</th>' + '</tr>');
+                  console.log(flattened);
+                  var colour_dict = {'lbl1': 'bgcolor="lightblue"', 'lbl2': 'bgcolor="orange"', 'no_label': ''};
+                  var filter_ids = function(id) {
+                      if (lbl1ids.includes(id)){
+                          return colour_dict['lbl1'];
+                      } else if (lbl2ids.includes(id)){
+                          return colour_dict['lbl2'];
+                      } else {
+                          return colour_dict['no_label']
+                      }
+                  };
+                  var results = flattened.map(a => '<tr ' + filter_ids(Number(a.__data__.eventid)) + '>' +
+                      '<td><input type=\"checkbox\" class=\"mycheckbox\" id=​rfile someprop="' +
+                      a.__data__.eventid + '"></input></td>' + '<th>' + a.__data__.eventid + '</th>' +
+                      '<th>' + a.__data__.text + '</th>' + '</tr>');
+
                   return results;
               };
 
@@ -347,6 +403,7 @@
 
               var selectAll = function(d) {
                   var choices = [];
+                  selected_ids = [];
                   console.log('Select All!');
                   d3.selectAll(".selectAll").each(function (d) {
                       cb = d3.select(this);
@@ -354,15 +411,17 @@
                           d3.selectAll(".mycheckbox").each(function (d) {
                               cb = d3.select(this);
                               cb.property("checked", true)
+                              selected_ids.push(cb['_groups'][0][0].attributes.someprop.value);
                           });
                       } else {
                           d3.selectAll(".mycheckbox").each(function (d) {
                               cb = d3.select(this);
                               cb.property("checked", false)
+                              selected_ids.push(cb['_groups'][0][0].attributes.someprop.value);
                           });
                       }
+                      console.log(selected_ids);
                   });
-                  console.log(choices);
               };
 
               // Add data points!
@@ -370,7 +429,7 @@
                 .data(data1)
                   .enter().append("circle")
                 .attr("class", "dot")
-                .attr("r", 0.5) // radius size, could map to another data dimension
+                .attr("r", 0.75) // radius size, could map to another data dimension
                 .attr("cx", function(d) { return xScale( d.x ); })     // x position
                 .attr("cy", function(d) { return yScale( d.y ); })  // y position
                 .on("mouseover", tipMouseover)
@@ -381,10 +440,6 @@
                   circles.style("fill", function(d) {
                       return d.text.toLowerCase().includes(txtName.toLowerCase()) ? "blue" : "black";
                   });
-                  var filter_fn = function (d) {
-                      return d.text.toLowerCase().includes(txtName.toLowerCase())
-                  };
-                  console.log(filter_fn(d));
               });
               d3.select("#search_button").on("click", function() {
                   var output_search = onSearch();
@@ -392,7 +447,29 @@
               });
               d3.select("#reset").on("click", resetted);
               d3.select("#selectAll").on("click", selectAll);
-              update();
+              d3.select("#label_1").on("click",  function(d) {
+                  console.log('Apply label 1 !');
+                  var integer_selected_ids = selected_ids.map(Number);
+                  circles.style("fill", function (d) {
+                      return integer_selected_ids.includes(Number(d.eventid)) ? "blue" : "black";
+                  });
+                  lbl1ids.push(integer_selected_ids);
+                  lbl1ids = flatten(lbl1ids);
+                  drawTable();
+                  updateColors();
+              });
+              d3.select("#label_2").on("click",  function(d) {
+                  console.log('Apply label 2 !');
+                  var integer_selected_ids = selected_ids.map(Number);
+                  circles.style("fill", function (d) {
+                      return integer_selected_ids.includes(Number(d.eventid)) ? "orange" : "black";
+                  });
+                  lbl2ids.push(integer_selected_ids);
+                  lbl2ids = flatten(lbl2ids);
+                  drawTable();
+                  updateColors();
+              });
+              //update_selected_ids();
 
               // d3.select("#rfile").on("onmouseup", function(){console.log('Clicked button!')})
               lasso.items(d3.selectAll(".dot"));
