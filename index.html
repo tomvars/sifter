@@ -115,6 +115,21 @@
             .label_1 {
                 float: right
             }
+            .label_1 {
+                float: right
+            }
+            .label_1 {
+                float: right
+            }
+            .save {
+                float: right;
+            }
+            .browse {
+                float: right;
+            }
+            .load {
+                float: right;
+            }
         </style>
         <script src="d3-lasso.js"></script>
     </head>
@@ -149,6 +164,9 @@
         <button id="button">Search</button>
         <button id="label_2" class="label_2">Label 2</button>
         <button id="label_1" class="label_1">Label 1</button>
+        <button id="save" class="save">Save</button>
+        <button id="load" class="load">Load</button>
+        <input type="file" name="browse" text="Load" class="browse" id="browse">
         <!-- Optionally reference your vis JS file here, or define in a script tag -->
         <!-- <script type="text/javascript" src="js/my-vis.js"></script> -->
         <script type="text/javascript">
@@ -469,7 +487,80 @@
                   drawTable();
                   updateColors();
               });
-              //update_selected_ids();
+              d3.select("#save").on("click",  function(d) {
+                  // This saves to disk in the format id, label
+                  console.log('SAVE !');
+                  function exportToCsv(filename, rows) {
+                      var processRow = function (row) {
+                          var finalVal = '';
+                          for (var j = 0; j < row.length; j++) {
+                              var innerValue = row[j] === null ? '' : row[j].toString();
+                              if (row[j] instanceof Date) {
+                                  innerValue = row[j].toLocaleString();
+                              };
+                              var result = innerValue.replace(/"/g, '""');
+                              if (result.search(/("|,|\n)/g) >= 0)
+                                  result = '"' + result + '"';
+                              if (j > 0)
+                                  finalVal += ',';
+                              finalVal += result;
+                          }
+                          return finalVal + '\n';
+                      };
+
+                      var csvFile = '';
+                      for (var i = 0; i < rows.length; i++) {
+                          csvFile += processRow(rows[i]);
+                      }
+
+                      var blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
+                      if (navigator.msSaveBlob) { // IE 10+
+                          navigator.msSaveBlob(blob, filename);
+                      } else {
+                          var link = document.createElement("a");
+                          if (link.download !== undefined) { // feature detection
+                              // Browsers that support HTML5 download attribute
+                              var url = URL.createObjectURL(blob);
+                              link.setAttribute("href", url);
+                              link.setAttribute("download", filename);
+                              link.style.visibility = 'hidden';
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                          }
+                      }
+                  }
+                  header = [['id', 'label']];
+                  output_array_1 = lbl1ids.map(a => [a, 1]);
+                  output_array_2 = lbl2ids.map(a => [a, 2]);
+                  output_array = header.concat(output_array_1.concat(output_array_2));
+                  exportToCsv('test.csv', output_array)
+              });
+
+              d3.select("#load").on("click",  function(d) {
+                  console.log('LOAD !');
+                  var file = d3.select("#browse").property("files")[0];
+                  var reader = new FileReader();
+                  console.log(file);
+                  lbl1ids = [];
+                  lbl2ids = [];
+                  reader.onload = function(evt) {
+                      rows = evt.target.result.split('\n');
+                      console.log('rows', rows)
+                      rows.forEach(function (item, index) {
+                          console.log(rows[index].split(',')[1]);
+                          if (rows[index].split(',')[1] === "1"){
+                              lbl1ids.push(Number(rows[index].split(',')[0]))
+                          } else {
+                              lbl2ids.push(Number(rows[index].split(',')[0]))
+                          }
+                      });
+                      console.log(lbl1ids);
+                      console.log(lbl2ids);
+                      updateColors();
+                  };
+                  content = reader.readAsText(file);
+              });
 
               // d3.select("#rfile").on("onmouseup", function(){console.log('Clicked button!')})
               lasso.items(d3.selectAll(".dot"));
