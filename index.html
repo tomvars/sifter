@@ -69,7 +69,7 @@
  */
             .clusterize-scroll{
                 max-height: 500px;
-                min-width: 100px;
+                min-width: 500px;
                 overflow: auto;
             }
 
@@ -134,9 +134,10 @@
         <script src="d3-lasso.js"></script>
     </head>
     <body>
-    <input type="text" id="search" class="label_search"/>
+    <textarea type="text" id="search" class="label_search"></textarea>
     <button id="search_button" class="label_search">Search</button>
-    <select id="selectButton" class="selectButton"></select>
+    <button id="loadData" class="load">Load</button>
+    <input type="file" name="browse" text="Load CSV" class="browse" id="browseData">
     <button id="reset" class="reset">Reset</button>
     <div id="wrapper" class="wrapper">
             <div id="vis-container" class="vis-container"></div>
@@ -183,36 +184,52 @@
                 }, []);
             }
             var run_viz = function(csv_name) {
-                d3.csv('./umap_clinicalBERT_25k.csv').then( function(data1) {
-                    data1.forEach(function(d) { // convert strings to numbers
-                        d.y = +d.y;
-                        d.x = +d.x;
-                    });
-                    d3.csv('./tsne_clinicalBERT_25k.csv').then( function(data2) {
-                        data2.forEach(function(d) { // convert strings to numbers
+                console.log('Main LOAD');
+                var file = d3.select("#browseData").property("files")[0];
+                console.log(file)
+                if (file === undefined) {
+                    console.log('No file loaded! using test data')
+                    d3.csv('./test_data.csv').then(function (data) {
+                        data.forEach(function (d) { // convert strings to numbers
                             d.y = +d.y;
                             d.x = +d.x;
                         });
-                        makeVis(data1, data2);
+                        makeVis(data);
                     });
-                });
+                } else {
+                    d3.csv(file.name).then(function (data) {
+                        data.forEach(function (d) { // convert strings to numbers
+                            d.y = +d.y;
+                            d.x = +d.x;
+                        });
+                        makeVis(data);
+                    });
                 };
+            }
 
             run_viz('umap');
-          var makeVis = function(data1, data2) {
+            var makeVis = function(data) {
               // Common pattern for defining vis size and margins
-              var margin = { top: 20, right: 20, bottom: 30, left: 40 },
-                  width  = 1000 - margin.left - margin.right,
+              var margin = {top: 20, right: 20, bottom: 30, left: 40},
+                  width = 1000 - margin.left - margin.right,
                   height = 700 - margin.top - margin.bottom;
 
               var xScale = d3.scaleLinear()
-                  .domain([ d3.min(data1, function(d) { return d.x; }) - 1,
-                      d3.max(data1, function(d) { return d.x; }) + 1 ])
+                  .domain([d3.min(data, function (d) {
+                      return d.x;
+                  }) - 1,
+                      d3.max(data, function (d) {
+                          return d.x;
+                      }) + 1])
                   .range([0, width]);
 
               var yScale = d3.scaleLinear()
-                  .domain([ d3.min(data1, function(d) { return d.y; }) - 1,
-                      d3.max(data1, function(d) { return d.y; }) + 1 ])
+                  .domain([d3.min(data, function (d) {
+                      return d.y;
+                  }) - 1,
+                      d3.max(data, function (d) {
+                          return d.y;
+                      }) + 1])
                   .range([height, 0]); // flip order because y-axis origin is upper LEFT
 
               // Define our axes
@@ -227,23 +244,24 @@
                   gX.call(xAxis.scale(d3.event.transform.rescaleX(xScale)));
                   gY.call(yAxis.scale(d3.event.transform.rescaleY(yScale)));
               }
+
               function resetted() {
                   canvas.call(zoom.transform, d3.zoomIdentity);
               }
+
               var zoom = d3.zoom()
                   .scaleExtent([1, 10])
                   .on("zoom", zoomed);
               // Add the visualization svg canvas to the vis-container <div>
               var canvas = d3.select("#vis-container").append("svg")
-                  .attr("width",  width  + margin.left + margin.right)
-                  .attr("height", height + margin.top  + margin.bottom)
-                .append("g")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
                   .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
-
               ;
 
               canvas.on("mousedown.zoom", null);
-              canvas.call(zoom)
+              canvas.call(zoom);
               // Add x-axis to the canvas
               var gX = canvas.append("g")
                   .attr("class", "axis axis--x")
@@ -256,14 +274,14 @@
                   .call(yAxis)
 
               // Lasso functions to execute while lassoing
-              var lasso_start = function() {
+              var lasso_start = function () {
                   lasso.items()
                       .attr("r", 0.75) // reset size
                       .style("fill", null) // clear all of the fills
-                      .classed({"not_possible":true,"selected":false}); // style as not possible
+                      .classed({"not_possible": true, "selected": false}); // style as not possible
               };
 
-              var lasso_draw = function() {
+              var lasso_draw = function () {
                   // Style the possible dots
                   lasso.possibleItems()
                       .classed("not_possible", false)
@@ -285,18 +303,19 @@
                   .append('table');
 
 
-              var onSearch = function() {
+              var onSearch = function () {
                   var indexArr = [];
-                  for(var i = 0, ii = selections.length; i < ii; i++) {
-                      if(selections[i].toString().toLowerCase().includes(search.value.toLowerCase())){
+                  for (var i = 0, ii = selections.length; i < ii; i++) {
+                      if (selections[i].toString().toLowerCase().includes(search.value.toLowerCase())) {
                           indexArr.push(i);
-                      };
+                      }
+                      ;
                   }
                   var resultArr = indexArr.map(i => selections[i])
                   var output_search = resultArr;
                   return output_search;
               };
-              var update_selected_ids = function() {
+              var update_selected_ids = function () {
                   selected_ids = [];
                   console.log('CALLED THIS FUNCTION!');
                   d3.selectAll(".mycheckbox").each(function (d) {
@@ -307,37 +326,37 @@
                   });
                   console.log(selected_ids);
               };
-              var drawTable = function(d) {
+              var drawTable = function (d) {
                   selections = filterresults(current_selections);
                   selections = flatten(selections);
                   var set = new Set(selections);
                   clusterize.update(Array.from(set));
               };
-              var updateColors = function(d) {
-                  var getColor = function(d) {
+              var updateColors = function (d) {
+                  var getColor = function (d) {
                       if (lbl1ids.includes(Number(d.eventid))) {
-                          return "blue"
+                          return "green"
                       } else if (lbl2ids.includes(Number(d.eventid))) {
                           return "orange"
-                      } else if (selected_ids.includes(Number(d.eventid))){
+                      } else if (selected_ids.includes(Number(d.eventid))) {
                           return "red"
                       } else {
-                              return "black"
-                          }
+                          return "black"
+                      }
                   };
                   circles.style("fill", function (d) {
                       return getColor(d);
                   });
               };
 
-              var lasso_end = function(d) {
+              var lasso_end = function (d) {
                   // Reset the color of all dots
                   lasso.items()
-                      .classed("not_possible",false)
-                      .classed("possible",false)
+                      .classed("not_possible", false)
+                      .classed("possible", false)
                   // Save selection
                   current_selections = lasso.selectedItems()._groups;
-                  var get_flattened_id_array = function(arr) {
+                  var get_flattened_id_array = function (arr) {
                       var flattened = flatten(arr)
                       return flattened.map(a => a.__data__.eventid).map(Number)
                   }
@@ -356,14 +375,14 @@
                   updateColors();
               };
 
-              var filterresults = function(selections) {
+              var filterresults = function (selections) {
                   var flattened = flatten(selections);
                   console.log(flattened);
                   var colour_dict = {'lbl1': 'bgcolor="lightblue"', 'lbl2': 'bgcolor="orange"', 'no_label': ''};
-                  var filter_ids = function(id) {
-                      if (lbl1ids.includes(id)){
+                  var filter_ids = function (id) {
+                      if (lbl1ids.includes(id)) {
                           return colour_dict['lbl1'];
-                      } else if (lbl2ids.includes(id)){
+                      } else if (lbl2ids.includes(id)) {
                           return colour_dict['lbl2'];
                       } else {
                           return colour_dict['no_label']
@@ -379,9 +398,9 @@
 
               // Create the area where the lasso event can be triggered
               var lasso_area = canvas.append("rect")
-                  .attr("width",width)
-                  .attr("height",height)
-                  .style("opacity",0);
+                  .attr("width", width)
+                  .attr("height", height)
+                  .style("opacity", 0);
 
               // Define the lasso
               var lasso = d3.lasso()
@@ -389,9 +408,9 @@
                   .closePathSelect(true) // can items be selected by closing the path?
                   .hoverSelect(true) // can items by selected by hovering over them?
                   .targetArea(lasso_area) // area where the lasso can be started
-                  .on("start",lasso_start) // lasso start function
-                  .on("draw",lasso_draw) // lasso draw function
-                  .on("end",lasso_end); // lasso end function
+                  .on("start", lasso_start) // lasso start function
+                  .on("draw", lasso_draw) // lasso draw function
+                  .on("end", lasso_end); // lasso end function
 
               canvas.call(lasso);
               // Add the tooltip container to the vis container
@@ -401,25 +420,25 @@
                   .style("opacity", 0);
 
               // tooltip mouseover event handler
-              var tipMouseover = function(d) {
-                  var html  = d.text + "<br/>" +
+              var tipMouseover = function (d) {
+                  var html = d.text + "<br/>" +
                       "<b>" + d.eventid + "</b>";
                   tooltip.html(html)
                       .style("left", (d3.event.pageX + 15) + "px")
                       .style("top", (d3.event.pageY - 28) + "px")
-                    .transition()
+                      .transition()
                       .duration(200) // ms
                       .style("opacity", .9) // started as 0!
 
               };
               // tooltip mouseout event handler
-              var tipMouseout = function(d) {
+              var tipMouseout = function (d) {
                   tooltip.transition()
                       .duration(300) // ms
                       .style("opacity", 0); // don't care about position!
               };
 
-              var selectAll = function(d) {
+              var selectAll = function (d) {
                   var choices = [];
                   selected_ids = [];
                   console.log('Select All!');
@@ -444,39 +463,44 @@
 
               // Add data points!
               var circles = canvas.selectAll(".dot")
-                .data(data1)
+                  .data(data)
                   .enter().append("circle")
-                .attr("class", "dot")
-                .attr("r", 0.75) // radius size, could map to another data dimension
-                .attr("cx", function(d) { return xScale( d.x ); })     // x position
-                .attr("cy", function(d) { return yScale( d.y ); })  // y position
-                .on("mouseover", tipMouseover)
-                .on("mouseout", tipMouseout);
+                  .attr("class", "dot")
+                  .attr("r", 0.75) // radius size, could map to another data dimension
+                  .attr("cx", function (d) {
+                      return xScale(d.x);
+                  })     // x position
+                  .attr("cy", function (d) {
+                      return yScale(d.y);
+                  })  // y position
+                  .on("mouseover", tipMouseover)
+                  .on("mouseout", tipMouseout);
 
-              d3.select("#button").on("click", function(d) {
+              d3.select("#button").on("click", function (d) {
                   var txtName = d3.select("#txtName").node().value;
-                  circles.style("fill", function(d) {
-                      return d.text.toLowerCase().includes(txtName.toLowerCase()) ? "blue" : "black";
+                  circles.style("fill", function (d) {
+                      return d.text.toLowerCase().includes(txtName.toLowerCase()) ? "green" : "black";
                   });
               });
-              d3.select("#search_button").on("click", function() {
+              d3.select("#search_button").on("click", function () {
                   var output_search = onSearch();
                   clusterize.update(output_search);
+
               });
               d3.select("#reset").on("click", resetted);
               d3.select("#selectAll").on("click", selectAll);
-              d3.select("#label_1").on("click",  function(d) {
+              d3.select("#label_1").on("click", function (d) {
                   console.log('Apply label 1 !');
                   var integer_selected_ids = selected_ids.map(Number);
                   circles.style("fill", function (d) {
-                      return integer_selected_ids.includes(Number(d.eventid)) ? "blue" : "black";
+                      return integer_selected_ids.includes(Number(d.eventid)) ? "green" : "black";
                   });
                   lbl1ids.push(integer_selected_ids);
                   lbl1ids = flatten(lbl1ids);
                   drawTable();
                   updateColors();
               });
-              d3.select("#label_2").on("click",  function(d) {
+              d3.select("#label_2").on("click", function (d) {
                   console.log('Apply label 2 !');
                   var integer_selected_ids = selected_ids.map(Number);
                   circles.style("fill", function (d) {
@@ -487,9 +511,10 @@
                   drawTable();
                   updateColors();
               });
-              d3.select("#save").on("click",  function(d) {
+              d3.select("#save").on("click", function (d) {
                   // This saves to disk in the format id, label
                   console.log('SAVE !');
+
                   function exportToCsv(filename, rows) {
                       var processRow = function (row) {
                           var finalVal = '';
@@ -497,7 +522,8 @@
                               var innerValue = row[j] === null ? '' : row[j].toString();
                               if (row[j] instanceof Date) {
                                   innerValue = row[j].toLocaleString();
-                              };
+                              }
+                              ;
                               var result = innerValue.replace(/"/g, '""');
                               if (result.search(/("|,|\n)/g) >= 0)
                                   result = '"' + result + '"';
@@ -513,7 +539,7 @@
                           csvFile += processRow(rows[i]);
                       }
 
-                      var blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
+                      var blob = new Blob([csvFile], {type: 'text/csv;charset=utf-8;'});
                       if (navigator.msSaveBlob) { // IE 10+
                           navigator.msSaveBlob(blob, filename);
                       } else {
@@ -530,6 +556,7 @@
                           }
                       }
                   }
+
                   header = [['id', 'label']];
                   output_array_1 = lbl1ids.map(a => [a, 1]);
                   output_array_2 = lbl2ids.map(a => [a, 2]);
@@ -537,19 +564,19 @@
                   exportToCsv('test.csv', output_array)
               });
 
-              d3.select("#load").on("click",  function(d) {
+              d3.select("#load").on("click", function (d) {
                   console.log('LOAD !');
                   var file = d3.select("#browse").property("files")[0];
                   var reader = new FileReader();
                   console.log(file);
                   lbl1ids = [];
                   lbl2ids = [];
-                  reader.onload = function(evt) {
+                  reader.onload = function (evt) {
                       rows = evt.target.result.split('\n');
                       console.log('rows', rows)
                       rows.forEach(function (item, index) {
                           console.log(rows[index].split(',')[1]);
-                          if (rows[index].split(',')[1] === "1"){
+                          if (rows[index].split(',')[1] === "1") {
                               lbl1ids.push(Number(rows[index].split(',')[0]))
                           } else {
                               lbl2ids.push(Number(rows[index].split(',')[0]))
@@ -565,50 +592,29 @@
               // d3.select("#rfile").on("onmouseup", function(){console.log('Clicked button!')})
               lasso.items(d3.selectAll(".dot"));
               // add the options to the button
-              d3.select("#selectButton")
-                  .selectAll('myOptions')
-                  .data(['umap', 'tsne'])
-                  .enter()
-                  .append('option')
-                  .text(function (d) { return d; }) // text showed in the menu
-                  .attr("value", function (d) { return d; })
+              // d3.select("#selectButton")
+              //     .selectAll('myOptions')
+              //     .data(['umap', 'tsne'])
+              //     .enter()
+              //     .append('option')
+              //     .text(function (d) { return d; }) // text showed in the menu
+              //     .attr("value", function (d) { return d; })
               // When the button is changed, run the updateChart function
-              d3.select("#selectButton").on("change", function(d) {
+              d3.select("#loadData").on("click", function (d) {
                   // recover the option that has been chosen
-                  var selectedOption = d3.select(this).property("value")
+                  console.log('LOAD !');
+                  var file = d3.select("#browseData").property("files")[0];
                   // run the updateChart function with this selected option
-                  if (selectedOption=='tsne') {
-                      data = data2;
-                  } else {
-                      data = data1;
-                  }
-                  var xScale = d3.scaleLinear()
-                      .domain([ d3.min(data, function(d) { return d.x; }) - 1,
-                          d3.max(data, function(d) { return d.x; }) + 1 ])
-                      .range([0, width]);
-
-                  var yScale = d3.scaleLinear()
-                      .domain([ d3.min(data, function(d) { return d.y; }) - 1,
-                          d3.max(data, function(d) { return d.y; }) + 1 ])
-                      .range([height, 0]); // flip order because y-axis origin is upper LEFT
-
-                  // Define our axes
-                  var xAxis = d3.axisBottom()
-                      .scale(xScale);
-
-                  var yAxis = d3.axisLeft()
-                      .scale(yScale);
-
-                  // Add x-axis to the canvas
-                  canvas.selectAll("g.x.axis").call(xAxis);
-                  // Add y-axis to the canvas
-                  canvas.selectAll("g.y.axis").call(yAxis);
-                  // Add data points!
-                  canvas.selectAll('circle')
-                      .data(data)
-                      .attr("cx", function(d) { return xScale( d.x ); })     // x position
-                      .attr("cy", function(d) { return yScale( d.y ); });  // y positionn
-              })
+                  console.log(file.name)
+                  d3.csv(file.name).then(function (data) {
+                      data.forEach(function (d) { // convert strings to numbers
+                          d.y = +d.y;
+                          d.x = +d.x;
+                      });
+                      d3.select("svg").remove();
+                      makeVis(data)
+                  })
+              });
           };
         </script>
     </body>
