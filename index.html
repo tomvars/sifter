@@ -499,6 +499,11 @@
                   lbl1ids = flatten(lbl1ids);
                   drawTable();
                   updateColors();
+                  // try and uncheck the selectAll box
+                  d3.selectAll(".selectAll").each(function (d) {
+                      cb = d3.select(this);
+                      cb.property("checked", false);
+                  });
               });
               d3.select("#label_2").on("click", function (d) {
                   console.log('Apply label 2 !');
@@ -510,6 +515,11 @@
                   lbl2ids = flatten(lbl2ids);
                   drawTable();
                   updateColors();
+                  // try and uncheck the selectAll box
+                  d3.selectAll(".selectAll").each(function (d) {
+                      cb = d3.select(this);
+                      cb.property("checked", false);
+                  });
               });
               d3.select("#save").on("click", function (d) {
                   // This saves to disk in the format id, label
